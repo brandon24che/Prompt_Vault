@@ -1,0 +1,238 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with role and saved prompt bookmarks",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "User authentication unique identifier"
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address"
+        },
+        "username": {
+          "type": "string",
+          "description": "Display handle or username",
+          "maxLength": 50,
+          "minLength": 2
+        },
+        "role": {
+          "type": "string",
+          "enum": ["user", "admin"],
+          "description": "Role determining access to admin features"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of user registration"
+        },
+        "isSuspended": {
+          "type": "boolean",
+          "description": "Whether the user account has been suspended by an administrator"
+        },
+        "suspendedReason": {
+          "type": "string",
+          "description": "Optional reason or note regarding the suspension"
+        },
+        "suspendedAt": {
+          "type": "string",
+          "description": "ISO timestamp when account was suspended"
+        },
+        "unsuspendedAt": {
+          "type": "string",
+          "description": "ISO timestamp when account was unsuspended"
+        },
+        "promptsCount": {
+          "type": "number",
+          "description": "Cached count of prompts published by user"
+        }
+      },
+      "required": ["uid", "email", "username", "role", "createdAt"]
+    },
+    "Prompt": {
+      "title": "Prompt",
+      "description": "Community shared AI prompt specification with metadata",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the prompt"
+        },
+        "title": {
+          "type": "string",
+          "description": "Descriptive title of the prompt",
+          "maxLength": 150,
+          "minLength": 3
+        },
+        "category": {
+          "type": "string",
+          "description": "Functional category of the prompt",
+          "enum": ["Coding", "Writing", "Image Gen", "Business", "Productivity", "Research", "Other"]
+        },
+        "targetPlatform": {
+          "type": "string",
+          "description": "Recommended AI platform",
+          "enum": ["ChatGPT", "Claude", "Gemini", "Midjourney", "Stable Diffusion"]
+        },
+        "promptText": {
+          "type": "string",
+          "description": "Raw prompt text containing optional [variable] parameters",
+          "maxLength": 10000,
+          "minLength": 5
+        },
+        "outputDescription": {
+          "type": "string",
+          "description": "Expected outcome or purpose of the prompt",
+          "maxLength": 2000,
+          "minLength": 3
+        },
+        "authorId": {
+          "type": "string",
+          "description": "Firebase UID of creator"
+        },
+        "authorUsername": {
+          "type": "string",
+          "description": "Creator display name",
+          "maxLength": 60
+        },
+        "authorEmail": {
+          "type": "string",
+          "description": "Creator email address"
+        },
+        "tags": {
+          "type": "array",
+          "description": "Topic tags classifying the prompt"
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "Optional illustration image URL or compressed image data"
+        },
+        "externalLink": {
+          "type": "string",
+          "description": "Optional reference website or documentation link"
+        },
+        "pdfUrl": {
+          "type": "string",
+          "description": "Optional attached PDF document file as base64 data URL or storage link"
+        },
+        "pdfName": {
+          "type": "string",
+          "description": "Filename of the attached PDF document"
+        },
+        "pdfSize": {
+          "type": "number",
+          "description": "Size in bytes of attached PDF document"
+        },
+        "isProduct": {
+          "type": "boolean",
+          "description": "Flag indicating if prompt is a product showcase / prompt-for-product"
+        },
+        "isFeatured": {
+          "type": "boolean",
+          "description": "Flag set by admin to feature prompt on spotlight"
+        },
+        "likesCount": {
+          "type": "number",
+          "description": "Aggregated count of upvotes/likes"
+        },
+        "copiesCount": {
+          "type": "number",
+          "description": "Total times prompt was copied to clipboard"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when created"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when updated"
+        }
+      },
+      "required": [
+        "title",
+        "category",
+        "targetPlatform",
+        "promptText",
+        "outputDescription",
+        "authorId",
+        "authorUsername",
+        "likesCount",
+        "copiesCount"
+      ]
+    },
+    "PromptLike": {
+      "title": "PromptLike",
+      "description": "Record of a user liking a specific prompt",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of the user who liked"
+        },
+        "promptId": {
+          "type": "string",
+          "description": "ID of the liked prompt"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp of like"
+        }
+      },
+      "required": ["userId", "promptId"]
+    },
+    "Bookmark": {
+      "title": "Bookmark",
+      "description": "User saved prompt bookmark reference",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of the bookmark owner"
+        },
+        "promptId": {
+          "type": "string",
+          "description": "ID of the saved prompt"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp of save"
+        }
+      },
+      "required": ["userId", "promptId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "User document store containing username, email, and user/admin role"
+    },
+    "/admins/{adminId}": {
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "Admin registry document used for rapid zero-cost security rules verification"
+    },
+    "/prompts/{promptId}": {
+      "schema": {
+        "$ref": "#/entities/Prompt"
+      },
+      "description": "AI prompts repository queryable by category, platform, and community feed"
+    },
+    "/prompts/{promptId}/likes/{userId}": {
+      "schema": {
+        "$ref": "#/entities/PromptLike"
+      },
+      "description": "Subcollection tracking individual upvotes on a prompt"
+    },
+    "/users/{userId}/bookmarks/{promptId}": {
+      "schema": {
+        "$ref": "#/entities/Bookmark"
+      },
+      "description": "Subcollection tracking personal bookmarks saved by each user"
+    }
+  }
+}

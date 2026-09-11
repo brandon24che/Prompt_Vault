@@ -1,0 +1,134 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Admin verification: checks if the user's document in /users has role == 'admin'
+    // Also protects bootstrap admin identity by email and UID to prevent system lockout
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email != null && (
+          request.auth.token.email == 'cheec702@gmail.com' ||
+          request.auth.token.email.lower() == 'cheec702@gmail.com'
+        )) ||
+        request.auth.uid == 'llxjAhD2Sifjjz7Ioo9izOFlzPn2' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Check if the user is in good standing (not suspended by an administrator)
+    function isNotSuspended() {
+      return isSignedIn() && (
+        !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+        !('isSuspended' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isSuspended != true
+      );
+    }
+
+    // Connection health check document
+    match /test/connection {
+      allow read: if true;
+    }
+
+    // Admin collection
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // User profiles
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if (
+        (isOwner(userId) && (request.resource.data.role == 'user' || isAdmin())) ||
+        isAdmin()
+      );
+      allow update: if (
+        (isOwner(userId) &&
+         request.resource.data.role == resource.data.role &&
+         (!('isSuspended' in request.resource.data) || request.resource.data.isSuspended == resource.data.isSuspended)) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+
+      // Personal Bookmarks
+      match /bookmarks/{promptId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if (isOwner(userId) && (isNotSuspended() || isAdmin())) || isAdmin();
+      }
+    }
+
+    // Prompts repository
+    match /prompts/{promptId} {
+      // Public community read
+      allow read: if true;
+
+      // Creation: requires signed in, active (not suspended), authorId matching caller, and schema validation
+      allow create: if isSignedIn() &&
+        (isNotSuspended() || isAdmin()) &&
+        request.resource.data.authorId == request.auth.uid &&
+        request.resource.data.title is string &&
+        request.resource.data.title.size() >= 3 &&
+        request.resource.data.title.size() <= 200 &&
+        request.resource.data.promptText is string &&
+        request.resource.data.promptText.size() >= 5 &&
+        request.resource.data.promptText.size() <= 20000 &&
+        (!('imageUrl' in request.resource.data) || (request.resource.data.imageUrl is string && request.resource.data.imageUrl.size() <= 500000)) &&
+        (!('externalLink' in request.resource.data) || (request.resource.data.externalLink is string && request.resource.data.externalLink.size() <= 2000)) &&
+        (!('pdfUrl' in request.resource.data) || (request.resource.data.pdfUrl is string && request.resource.data.pdfUrl.size() <= 2000000)) &&
+        (!('pdfName' in request.resource.data) || (request.resource.data.pdfName is string && request.resource.data.pdfName.size() <= 300)) &&
+        (!('pdfSize' in request.resource.data) || (request.resource.data.pdfSize is number)) &&
+        (!('isProduct' in request.resource.data) || (request.resource.data.isProduct is bool)) &&
+        (!('tags' in request.resource.data) || (request.resource.data.tags is list));
+
+      // Update:
+      // - Unauthenticated and authenticated visitors can increment copiesCount
+      // - Authenticated users can increment/decrement likesCount and copiesCount
+      // - Authors can update their prompt provided they are not suspended (or if admin)
+      // - Admins can update any prompt (moderation, featured spotlight, etc.)
+      allow update: if (
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['copiesCount'])) ||
+        (isSignedIn() && (
+          ((resource.data.authorId == request.auth.uid) && (isNotSuspended() || isAdmin())) ||
+          isAdmin() ||
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likesCount', 'copiesCount']))
+        ))
+      );
+
+      // Delete:
+      // - Prompt author can delete their prompt if active (not suspended) or admin
+      // - Admins can delete any prompt
+      // - Any signed-in user can purge system sample prompts
+      allow delete: if isSignedIn() && (
+        (resource.data.authorId == request.auth.uid && (isNotSuspended() || isAdmin())) ||
+        isAdmin() ||
+        resource.data.authorId == 'system-seed'
+      );
+
+      // Prompt likes subcollection
+      match /likes/{userId} {
+        allow read: if isSignedIn();
+        allow create, delete: if isOwner(userId) && (isNotSuspended() || isAdmin());
+      }
+    }
+  }
+}

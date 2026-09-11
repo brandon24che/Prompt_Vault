@@ -1,0 +1,6 @@
+{
+  "name": "PromptVault",
+  "description": "Store, share, and discover high-impact AI prompts with interactive variable filling and instant AI platform testing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
